@@ -1,0 +1,34 @@
+body,
+html {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  font-size: 16px;
+  margin: 0;
+  padding: 0;
+  background-color: darkgrey;
+}
+
+#app,
+.container {
+  width: 100%;
+  height: 100%;
+  color: white;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(50, 3rem);
+  padding: 2rem;
+}
+
+.tile {
+  border: 4px solid whitesmoke;
+  width: 3rem;
+  height: 3rem;
+}
+
+.title {
+  color: white;
+  text-align: center;
+}
