@@ -1,16 +1,16 @@
 module Tile = {
   open Css;
-  let cell = (alive: int) =>
+  let cell = alive =>
     style([
-      backgroundColor(alive == 1 ? black : white),
+      backgroundColor(alive ? black : white),
       border(px(4), solid, whitesmoke),
       width(rem(3.)),
       height(rem(3.)),
     ]);
   let component = ReasonReact.statelessComponent("Tile");
-  let make = (~row: int, ~column: int, _children) => {
+  let make = (~alive, _children) => {
     ...component,
-    render: _self => <div className=(cell(row + column)) />,
+    render: _self => <div className=(cell(alive)) />,
   };
 };
 
@@ -19,16 +19,26 @@ module Tile = {
    2. Any live cell with two or three live neighbors lives on to the next generation.
    3. Any live cell with more than three live neighbors dies, as if by overpopulation.
    4. Any dead cell with exactly three live neighbors becomes a live cell, as if by reproduction. */
-type cell = {neighbours: int};
+type cell = {alive: bool};
+
+let isAlive = neighbours =>
+  switch (neighbours) {
+  | 0 => false
+  | 1 => false
+  | 2 => true
+  | 3 => true
+  | 4 => false
+  | _ => false
+  };
 
 type state = {game: array(array(cell))};
 
-let beginningCell = {neighbours: 1};
+let beginningCell = {alive: true};
 
 let createBoard = Array.make_matrix(30, 30, beginningCell);
 
 type action =
-  | Update;
+  | Update(int, int, bool);
 
 type neighbours = {
   right: option(cell),
@@ -39,68 +49,66 @@ type neighbours = {
 
 let component = ReasonReact.reducerComponent("Game Of Life");
 
-let getNeighbour = (row: int, column: int, board: array(array(cell))) =>
-  switch (row, column, board) {
-  | (0, 0, _) => {
-      right: Some(board[row][column + 1]),
-      left: None,
-      bottom: Some(board[row + 1][column]),
-      top: None,
-    }
-  | (0, _, _) => {
-      right: Some(board[row][column + 1]),
-      left: Some(board[row][column - 1]),
-      bottom: Some(board[row + 1][column]),
-      top: None,
-    }
-  | (_, 0, _) => {
-      right: Some(board[row][column + 1]),
-      top: Some(board[row - 1][column]),
-      bottom: Some(board[row + 1][column]),
-      left: None,
-    }
-  | (30, 30, _) => {
-      right: None,
-      left: Some(board[row][column - 1]),
-      bottom: None,
-      top: Some(board[row - 1][column]),
-    }
-  | (_, 30, _) => {
-      right: None,
-      top: Some(board[row - 1][column]),
-      left: Some(board[row][column - 1]),
-      bottom: Some(board[row + 1][column]),
-    }
-  | (30, _, _) => {
-      right: Some(board[row][column + 1]),
-      top: Some(board[row - 1][column]),
-      left: Some(board[row][column - 1]),
-      bottom: None,
-    }
-  | _ => {
-      right: Some(board[row][column + 1]),
-      left: Some(board[row][column - 1]),
-      bottom: Some(board[row + 1][column]),
-      top: Some(board[row - 1][column]),
-    }
-  | exception _ => {bottom: None, top: None, left: None, right: None}
+let get = (row, column, board: array(array(cell))) =>
+  switch (board[row][column]) {
+  | value => Some(value)
+  | exception _ => None
   };
 
-let mapRow = (row, data: array(cell), board) => {
-  let neighbours = getNeighbour(row, 10, board);
-  Js.log(row);
-  Js.log(neighbours);
+let getNeighbour = (row: int, column: int, board: array(array(cell))) => [
+  get(row - 1, column + 1, board), /* Top Right */
+  get(row - 1, column - 1, board), /* Top Left */
+  get(row + 1, column + 1, board), /* Bottom Right */
+  get(row + 1, column - 1, board), /* Bottom Left */
+  get(row, column + 1, board), /* Right */
+  get(row, column - 1, board), /* left */
+  get(row + 1, column, board), /* bottom */
+  get(row - 1, column, board) /* top */
+];
+
+type selfType = ReasonReact.self(state, ReasonReact.noRetainedProps, action);
+
+let mapRow = (row, data: array(cell), self: selfType) =>
   Array.mapi(
-    (column, _c) => <Tile key=(string_of_int(column)) row column />,
+    (column, _c) => {
+      let neighbours = getNeighbour(row, column, self.state.game);
+      let neighbourCount =
+        List.fold_left(
+          (acc, neighbour) =>
+            switch (neighbour) {
+            | Some(_neighbour) => acc + 1
+            | None => acc
+            },
+          0,
+          neighbours,
+        );
+      Js.log(neighbourCount);
+      let alive = isAlive(neighbourCount);
+      self.send(Update(row, column, alive));
+      <Tile key=(string_of_int(column)) alive />;
+    },
     data,
   );
-};
+
+let updateGame = (targetRow, targetCol, isAlive, game: array(array(cell))) =>
+  Array.mapi(
+    (rowNumber, row) =>
+      Array.mapi(
+        (columnNumber, _column) =>
+          targetRow == rowNumber && targetCol == columnNumber ?
+            {alive: isAlive} : game[rowNumber][columnNumber],
+        row,
+      ),
+    game,
+  );
 
 let make = _children => {
   ...component,
   initialState: () => {game: createBoard},
-  reducer: (action: action, _state: state) =>
+  reducer: (action, state) =>
     switch (action) {
+    | Update(row, column, alive) =>
+      ReasonReact.Update({game: updateGame(row, column, alive, state.game)})
     | _ => ReasonReact.NoUpdate
     },
   render: self =>
@@ -108,10 +116,7 @@ let make = _children => {
       <h2 className="title"> (ReasonReact.string("Game of Life")) </h2>
       <div className="board">
         (
-          Array.mapi(
-            (r, c) => mapRow(r, c, self.state.game),
-            self.state.game,
-          )
+          Array.mapi((r, c) => mapRow(r, c, self), self.state.game)
           |> (
             row =>
               Belt.Array.mapWithIndex(row, (idx, cellElement) =>
