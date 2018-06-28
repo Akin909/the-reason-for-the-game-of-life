@@ -11,17 +11,24 @@ html {
         Cantarell, "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
+button {
+    -webkit-appearance: none;
+}
+
 #app,
 .container {
     width: 100%;
-    height: 100%;
+    min-height: 100%;
     color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .board {
-    display: grid;
-    grid-template-columns: repeat(50, 3rem);
     padding: 2rem;
+    display: grid;
+    grid-template-columns: repeat(30, 1fr);
 }
 
 .title {
