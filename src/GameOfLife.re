@@ -37,16 +37,17 @@ module Tile = {
    4. Any dead cell with exactly three live neighbors becomes a live cell, as if by reproduction. */
 type cell = {alive: bool};
 
-let isAlive = (neighbours, cell) =>
+let isAlive = (neighbours, cell) => {
   switch (neighbours, cell.alive) {
-  | (0, _) => false
-  | (1, _) => false
-  | (2, _) => true
-  | (3, false) => true /* rule 4 */
-  | (3, true) => true
-  | (4, _) => false
-  | (_, _) => false
-  };
+    | (0, _) => false
+    | (1, _) => false
+    | (2, _) => true
+    | (3, false) => true /* rule 4 */
+    | (3, true) => true
+    | (4, _) => false
+    | (_, _) => false
+    };
+}
 
 type gameBoard = array(array(cell));
 
@@ -120,20 +121,21 @@ let mapRow = (row, data, self: selfType) =>
     data,
   );
 
-let checkIsAlive = (row, column, game) =>
-  getNeighbour(row, column, game) 
+let checkIsAlive = (row: int, column: int, game: gameBoard) => {
+  getNeighbour(row, column, game)
     |> (neighbours) => 
       List.fold_left(
         (acc, neighbour) =>
         switch (neighbour) {
-            | Some(_neighbour) => acc + 1
+            | Some(neighbour) => neighbour.alive ? acc + 1 : acc
             | None => acc
           },
         0,
         neighbours,
       ) |> nbrs => isAlive(nbrs, game[row][column]);
+};
 
-let updateGame = (targetRow, targetCol, isAlive, game: gameBoard) =>
+let updateGame = (targetRow: int, targetCol: int, isAlive: bool, game: gameBoard) =>
   Array.mapi(
     (rowNumber, row) =>
       Array.mapi(
