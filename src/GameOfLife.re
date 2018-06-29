@@ -1,5 +1,3 @@
-[%%debugger.chrome];
-
 module Styles = {
   open Css;
 
@@ -7,19 +5,20 @@ module Styles = {
     width(rem(22.)),
     height(rem(5.)),
     borderRadius(rem(0.8)),
-    backgroundColor(skyblue),
+    color(white),
+    backgroundColor(hex("42424F")),
     fontSize(rem(1.2)),
-    border(px(0), solid, white),
+    border(px(0), solid, rgba(0, 0, 0, 0.7)),
     boxShadow(~x=px(0), ~y=px(1), ~blur=px(2), hex("6e6e6e"))
   ]);
 }
 
-module Tile = {
+module Cell = {
   open Css;
   let cell = alive =>
     style([
-      backgroundColor(alive ? black : white),
-      border(px(2), solid, whitesmoke),
+      backgroundColor(alive ? red : white),
+      border(px(1), solid, black),
       width(rem(1.2)),
       height(rem(1.2)),
     ]);
@@ -60,6 +59,8 @@ type originalCoords = array(coordinates);
 
 type state = {
   game: gameBoard,
+  started: bool,
+  intervalId: ref(option(Js.Global.intervalId))
 };
 
 let beginningCell = {alive: false};
@@ -67,7 +68,8 @@ let beginningCell = {alive: false};
 let createBoard = Array.make_matrix(30, 30, beginningCell);
 
 type action =
-  | Start
+  | Stop
+  | Tick
   | Update(int, int, bool)
   | Seed(gameBoard);
 
@@ -78,14 +80,18 @@ type neighbours = {
   bottom: option(cell),
 };
 
+type selfType = ReasonReact.self(state, ReasonReact.noRetainedProps, action);
+
 let component = ReasonReact.reducerComponent("Game Of Life");
 
+/* Safe array access */
 let get = (row, column, board) =>
   switch (board[row][column]) {
   | value => Some(value)
   | exception _ => None
   };
 
+/* Check all around the cell if a neighbour is out of bounds return a None */
 let getNeighbour = (row: int, column: int, board) => [
   get(row - 1, column + 1, board), /* Top Right */
   get(row - 1, column - 1, board), /* Top Left */
@@ -102,8 +108,6 @@ let getRandomCoordinates = (~limit: int, ~numberOfCells: int) => {
   Array.init(numberOfCells, _i => { row: Random.int(limit), column: Random.int(limit)});
 };
 
-type selfType = ReasonReact.self(state, ReasonReact.noRetainedProps, action);
-
 let mapRow = (row, data, self: selfType) =>
   Array.mapi(
     (column, _c) =>
@@ -116,11 +120,12 @@ let mapRow = (row, data, self: selfType) =>
             | None => false
             }
           )
-          |> (alive => <Tile key=(string_of_int(column)) alive />)
+          |> (alive => <Cell key=(string_of_int(column)) alive />)
       ),
     data,
   );
 
+/* Check if the Cell should be alive according to the rules of the game */
 let checkIsAlive = (row: int, column: int, game: gameBoard) => {
   getNeighbour(row, column, game)
     |> (neighbours) => 
@@ -135,6 +140,7 @@ let checkIsAlive = (row: int, column: int, game: gameBoard) => {
       ) |> nbrs => isAlive(nbrs, game[row][column]);
 };
 
+/* Update a particular cell this is used for the initial seeding */
 let updateGame = (targetRow: int, targetCol: int, isAlive: bool, game: gameBoard) =>
   Array.mapi(
     (rowNumber, row) =>
@@ -151,42 +157,56 @@ let updateGame = (targetRow: int, targetCol: int, isAlive: bool, game: gameBoard
     game,
   );
 
+/* Run the a generation of cells */
+let tick = (state: state) =>
+    Array.mapi(
+      (rowNo, row) =>
+      Array.mapi(
+        (colNo, _cell) => {alive: checkIsAlive(rowNo, colNo, state.game)},
+        row,
+      ),
+      state.game,
+    )
+    |> (newBoard) => ReasonReact.Update({ ...state, game: newBoard, started: true});
+
+/* Start the game loop */
+let runGeneration = ({ state, send }: selfType) =>  {
+  switch (state.started, state.intervalId^) {
+    | (true, Some(id)) => Js.Global.clearInterval(id) |> _ => send(Stop)
+    | (false, None) => state.intervalId := Some(Js.Global.setInterval(() => send(Tick), 100));
+  };
+}
+
 let make = _children => {
   ...component,
-  initialState: () => {game: createBoard},
+  initialState: () => {game: createBoard, started: false, intervalId: ref(None)},
   reducer: (action, state) =>
     switch (action) {
     | Update(row, column, alive) =>
-      ReasonReact.Update({ game: updateGame(row, column, alive, state.game) })
-    | Seed(board) => ReasonReact.Update({game: board })
-    | Start =>
-      let newBoard =
-        Array.mapi(
-          (rowNo, row) =>
-            Array.mapi(
-              (colNo, _cell) => {alive: checkIsAlive(rowNo, colNo, state.game)},
-              row,
-            ),
-          state.game,
-        );
-      ReasonReact.Update({ game: newBoard});
+      ReasonReact.Update({ ...state, game: updateGame(row, column, alive, state.game) })
+    | Seed(board) => ReasonReact.Update({...state, game: board })
+    | Tick => tick(state)
+    | Stop => ReasonReact.Update({ ...state, started: false, intervalId: ref(None) })
     },
-  didMount: ({state, send}) => {
-    let coords = getRandomCoordinates(~limit=30, ~numberOfCells=50);
-    let newState =
-      Array.fold_left(
-        (acc, coord) => updateGame(coord.row, coord.column, true, acc),
-        state.game,
-        coords,
-      );
-    send(Seed(newState));
+  didMount: ({state, send, onUnmount}) => {
+    getRandomCoordinates(~limit=30, ~numberOfCells=15)
+      |> (coords) =>
+        Array.fold_left(
+          (acc, coord) => updateGame(coord.row, coord.column, true, acc),
+          state.game,
+          coords
+        )
+        |> (newState) => send(Seed(newState));
+
+  onUnmount(() => 
+    switch (state.intervalId^) {
+      | Some(id) => Js.Global.clearInterval(id)
+      | None => ()
+    });
   },
   render: self =>
     <div className="container">
       <h2 className="title"> (ReasonReact.string("Game of Life")) </h2>
-      <button className=Styles.startButton onClick=(_ => self.send(Start))>
-      (ReasonReact.string("Start"))
-      </button>
       <div className="board">
         (
           Array.mapi((r, c) => mapRow(r, c, self), self.state.game)
@@ -201,5 +221,8 @@ let make = _children => {
           )
         )
       </div>
+      <button className=Styles.startButton onClick=(_ => runGeneration(self))>
+      (ReasonReact.string(self.state.started ? "Stop" : "Start"))
+      </button>
     </div>,
 };

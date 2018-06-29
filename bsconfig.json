@@ -1,3 +1,4 @@
+//"bsc-flags": ["-bs-g"],
 {
     "name": "react-template",
     "reason": {
@@ -15,7 +16,6 @@
     ],
     "suffix": ".bs.js",
     "namespace": true,
-    "bsc-flags": ["-bs-g"],
     "bs-dependencies": ["reason-react", "bs-css"],
     "refmt": 3
 }
