@@ -12,6 +12,7 @@ html {
 }
 
 button {
+    outline: none;
     -webkit-appearance: none;
 }
 
@@ -34,6 +35,7 @@ button {
     grid-template-columns: repeat(30, 1fr);
     border-bottom: 1px solid black;
     border-left: 1px solid black;
+    box-shadow: 0px 1px 1px rgba(0, 0, 0, 0.5);
 }
 
 .title {

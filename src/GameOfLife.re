@@ -10,14 +10,18 @@ module Styles = {
       fontSize(rem(1.2)),
       border(px(0), solid, rgba(0, 0, 0, 0.7)),
       boxShadow(~x=px(0), ~y=px(1), ~blur=px(2), rgba(0, 0, 0, 0.5)),
+      focus([boxShadow(~x=px(0), ~y=px(1), ~blur=px(2), goldenrod)]),
+      hover([boxShadow(~x=px(0), ~y=px(1), ~blur=px(2), hex("EB5381"))]),
     ]);
+  let title = style([color(white), textAlign(center)]);
+  let subtitle = style([fontStyle(italic), margin(px(0))]);
 };
 
 module Cell = {
   open Css;
   let cell = alive =>
     style([
-      backgroundColor(alive ? red : hex("33333C")),
+      backgroundColor(alive ? hex("EB5381") : hex("33333C")),
       borderTop(px(1), solid, black),
       borderRight(px(1), solid, black),
       borderCollapse(`collapse),
@@ -227,7 +231,12 @@ let make = _children => {
   },
   render: self =>
     <div className="container">
-      <h2 className="title"> (ReasonReact.string("Game of Life")) </h2>
+      <div>
+        <h1 className=Styles.title> (ReasonReact.string("Game of Life")) </h1>
+        <h4 className=Styles.subtitle>
+          (ReasonReact.string("Brought to you via ReasonML"))
+        </h4>
+      </div>
       <div className="board">
         (
           Array.mapi((r, c) => mapRow(r, c, self), self.state.game)
