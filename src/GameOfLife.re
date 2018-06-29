@@ -1,24 +1,26 @@
 module Styles = {
   open Css;
-
-  let startButton = style([
-    width(rem(22.)),
-    height(rem(5.)),
-    borderRadius(rem(0.8)),
-    color(white),
-    backgroundColor(hex("42424F")),
-    fontSize(rem(1.2)),
-    border(px(0), solid, rgba(0, 0, 0, 0.7)),
-    boxShadow(~x=px(0), ~y=px(1), ~blur=px(2), hex("6e6e6e"))
-  ]);
-}
+  let startButton =
+    style([
+      width(rem(22.)),
+      height(rem(5.)),
+      borderRadius(rem(0.8)),
+      color(white),
+      backgroundColor(hex("33333C")),
+      fontSize(rem(1.2)),
+      border(px(0), solid, rgba(0, 0, 0, 0.7)),
+      boxShadow(~x=px(0), ~y=px(1), ~blur=px(2), rgba(0, 0, 0, 0.5)),
+    ]);
+};
 
 module Cell = {
   open Css;
   let cell = alive =>
     style([
-      backgroundColor(alive ? red : white),
-      border(px(1), solid, black),
+      backgroundColor(alive ? red : hex("33333C")),
+      borderTop(px(1), solid, black),
+      borderRight(px(1), solid, black),
+      borderCollapse(`collapse),
       width(rem(1.2)),
       height(rem(1.2)),
     ]);
@@ -36,17 +38,16 @@ module Cell = {
    4. Any dead cell with exactly three live neighbors becomes a live cell, as if by reproduction. */
 type cell = {alive: bool};
 
-let isAlive = (neighbours, cell) => {
+let isAlive = (neighbours, cell) =>
   switch (neighbours, cell.alive) {
-    | (0, _) => false
-    | (1, _) => false
-    | (2, _) => true
-    | (3, false) => true /* rule 4 */
-    | (3, true) => true
-    | (4, _) => false
-    | (_, _) => false
-    };
-}
+  | (0, _) => false
+  | (1, _) => false
+  | (2, _) => true
+  | (3, false) => true /* rule 4 */
+  | (3, true) => true
+  | (4, _) => false
+  | (_, _) => false
+  };
 
 type gameBoard = array(array(cell));
 
@@ -60,7 +61,7 @@ type originalCoords = array(coordinates);
 type state = {
   game: gameBoard,
   started: bool,
-  intervalId: ref(option(Js.Global.intervalId))
+  intervalId: ref(option(Js.Global.intervalId)),
 };
 
 let beginningCell = {alive: false};
@@ -105,7 +106,9 @@ let getNeighbour = (row: int, column: int, board) => [
 
 let getRandomCoordinates = (~limit: int, ~numberOfCells: int) => {
   Random.init(int_of_float(Js.Date.now()));
-  Array.init(numberOfCells, _i => { row: Random.int(limit), column: Random.int(limit)});
+  Array.init(numberOfCells, _i =>
+    {row: Random.int(limit), column: Random.int(limit)}
+  );
 };
 
 let mapRow = (row, data, self: selfType) =>
@@ -126,22 +129,25 @@ let mapRow = (row, data, self: selfType) =>
   );
 
 /* Check if the Cell should be alive according to the rules of the game */
-let checkIsAlive = (row: int, column: int, game: gameBoard) => {
+let checkIsAlive = (row: int, column: int, game: gameBoard) =>
   getNeighbour(row, column, game)
-    |> (neighbours) => 
+  |> (
+    neighbours =>
       List.fold_left(
         (acc, neighbour) =>
-        switch (neighbour) {
-            | Some(neighbour) => neighbour.alive ? acc + 1 : acc
-            | None => acc
+          switch (neighbour) {
+          | Some(neighbour) => neighbour.alive ? acc + 1 : acc
+          | None => acc
           },
         0,
         neighbours,
-      ) |> nbrs => isAlive(nbrs, game[row][column]);
-};
+      )
+      |> (nbrs => isAlive(nbrs, game[row][column]))
+  );
 
 /* Update a particular cell this is used for the initial seeding */
-let updateGame = (targetRow: int, targetCol: int, isAlive: bool, game: gameBoard) =>
+let updateGame =
+    (targetRow: int, targetCol: int, isAlive: bool, game: gameBoard) =>
   Array.mapi(
     (rowNumber, row) =>
       Array.mapi(
@@ -159,50 +165,65 @@ let updateGame = (targetRow: int, targetCol: int, isAlive: bool, game: gameBoard
 
 /* Run the a generation of cells */
 let tick = (state: state) =>
-    Array.mapi(
-      (rowNo, row) =>
+  Array.mapi(
+    (rowNo, row) =>
       Array.mapi(
         (colNo, _cell) => {alive: checkIsAlive(rowNo, colNo, state.game)},
         row,
       ),
-      state.game,
-    )
-    |> (newBoard) => ReasonReact.Update({ ...state, game: newBoard, started: true});
+    state.game,
+  )
+  |> (
+    newBoard => ReasonReact.Update({...state, game: newBoard, started: true})
+  );
 
 /* Start the game loop */
-let runGeneration = ({ state, send }: selfType) =>  {
+let runGeneration = ({state, send}: selfType) =>
   switch (state.started, state.intervalId^) {
-    | (true, Some(id)) => Js.Global.clearInterval(id) |> _ => send(Stop)
-    | (false, None) => state.intervalId := Some(Js.Global.setInterval(() => send(Tick), 100));
+  | (true, Some(id)) => Js.Global.clearInterval(id) |> ((_) => send(Stop))
+  | (false, Some(id)) => Js.Global.clearInterval(id) |> ((_) => send(Stop))
+  | (true, None) =>
+    state.intervalId := Some(Js.Global.setInterval(() => send(Tick), 100))
+  | (false, None) =>
+    state.intervalId := Some(Js.Global.setInterval(() => send(Tick), 100))
   };
-}
 
 let make = _children => {
   ...component,
-  initialState: () => {game: createBoard, started: false, intervalId: ref(None)},
+  initialState: () => {
+    game: createBoard,
+    started: false,
+    intervalId: ref(None),
+  },
   reducer: (action, state) =>
     switch (action) {
     | Update(row, column, alive) =>
-      ReasonReact.Update({ ...state, game: updateGame(row, column, alive, state.game) })
-    | Seed(board) => ReasonReact.Update({...state, game: board })
+      ReasonReact.Update({
+        ...state,
+        game: updateGame(row, column, alive, state.game),
+      })
+    | Seed(board) => ReasonReact.Update({...state, game: board})
     | Tick => tick(state)
-    | Stop => ReasonReact.Update({ ...state, started: false, intervalId: ref(None) })
+    | Stop =>
+      ReasonReact.Update({...state, started: false, intervalId: ref(None)})
     },
   didMount: ({state, send, onUnmount}) => {
     getRandomCoordinates(~limit=30, ~numberOfCells=15)
-      |> (coords) =>
+    |> (
+      coords =>
         Array.fold_left(
           (acc, coord) => updateGame(coord.row, coord.column, true, acc),
           state.game,
-          coords
+          coords,
         )
-        |> (newState) => send(Seed(newState));
-
-  onUnmount(() => 
-    switch (state.intervalId^) {
+        |> (newState => send(Seed(newState)))
+    );
+    onUnmount(() =>
+      switch (state.intervalId^) {
       | Some(id) => Js.Global.clearInterval(id)
       | None => ()
-    });
+      }
+    );
   },
   render: self =>
     <div className="container">
@@ -221,8 +242,9 @@ let make = _children => {
           )
         )
       </div>
-      <button className=Styles.startButton onClick=(_ => runGeneration(self))>
-      (ReasonReact.string(self.state.started ? "Stop" : "Start"))
+      <button
+        className=Styles.startButton onClick=((_) => runGeneration(self))>
+        (ReasonReact.string(self.state.started ? "Stop" : "Start"))
       </button>
     </div>,
 };
